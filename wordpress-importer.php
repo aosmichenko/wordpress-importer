@@ -14,7 +14,7 @@ if ( ! defined( 'WP_LOAD_IMPORTERS' ) )
 	return;
 
 /** Display verbose errors */
-define( 'IMPORT_DEBUG', true );
+define( 'IMPORT_DEBUG', false );
 
 // Load Importer API
 require_once ABSPATH . 'wp-admin/includes/import.php';
@@ -118,8 +118,8 @@ class WP_Import extends WP_Importer {
 
 		// update incorrect/missing information in the DB
 		$this->backfill_parents();
-		//$this->backfill_attachment_urls();
-		//$this->remap_featured_images();
+		$this->backfill_attachment_urls();
+		$this->remap_featured_images();
 
 		$this->import_end();
 	}
@@ -533,28 +533,28 @@ class WP_Import extends WP_Importer {
 		foreach ( $this->posts as $post ) {
 			$post = apply_filters( 'wp_import_post_data_raw', $post );
 
-			//if ( ! post_type_exists( $post['post_type'] ) ) {
-			//	printf( __( 'Failed to import &#8220;%s&#8221;: Invalid post type %s', 'wordpress-importer' ),
-			//		esc_html($post['post_title']), esc_html($post['post_type']) );
-			//	echo '<br />';
-			//	do_action( 'wp_import_post_exists', $post );
-			//	continue;
-			//}
+			if ( ! post_type_exists( $post['post_type'] ) ) {
+				printf( __( 'Failed to import &#8220;%s&#8221;: Invalid post type %s', 'wordpress-importer' ),
+					esc_html($post['post_title']), esc_html($post['post_type']) );
+				echo '<br />';
+				do_action( 'wp_import_post_exists', $post );
+				continue;
+			}
 
-			//if ( isset( $this->processed_posts[$post['post_id']] ) && ! empty( $post['post_id'] ) )
-			//	continue;
+			if ( isset( $this->processed_posts[$post['post_id']] ) && ! empty( $post['post_id'] ) )
+				continue;
 
-			//if ( $post['status'] == 'auto-draft' )
-			//	continue;
+			if ( $post['status'] == 'auto-draft' )
+				continue;
 
-			//if ( 'nav_menu_item' == $post['post_type'] ) {
-			//	$this->process_menu_item( $post );
-			//	continue;
-			//}
+			if ( 'nav_menu_item' == $post['post_type'] ) {
+				$this->process_menu_item( $post );
+				continue;
+			}
 
 			$post_type_object = get_post_type_object( $post['post_type'] );
 
-			$post_exists = false;
+			$post_exists = post_exists( $post['post_title'], '', $post['post_date'] );
 			if ( $post_exists && get_post_type( $post_exists ) == $post['post_type'] ) {
 				printf( __('%s &#8220;%s&#8221; already exists.', 'wordpress-importer'), $post_type_object->labels->singular_name, esc_html($post['post_title']) );
 				echo '<br />';

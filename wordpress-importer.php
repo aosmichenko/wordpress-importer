@@ -107,16 +107,16 @@ class WP_Import extends WP_Importer {
 
 		$this->import_start( $file );
 
-		$this->get_author_mapping();
+//		$this->get_author_mapping();
 
 		wp_suspend_cache_invalidation( true );
 		$this->process_posts();
 		wp_suspend_cache_invalidation( false );
 
 		// update incorrect/missing information in the DB
-		$this->backfill_parents();
+//		$this->backfill_parents();
 //		$this->backfill_attachment_urls();
-		$this->remap_featured_images();
+//		$this->remap_featured_images();
 
 		$this->import_end();
 	}
@@ -522,10 +522,19 @@ class WP_Import extends WP_Importer {
 	 */
 	function process_posts() {
 		$this->posts = apply_filters( 'wp_import_posts', $this->posts );
-
+		$array_lost = array();
+		if (($handle = fopen("/mnt/radar_files/import/lost_slides.csv", "r")) !== FALSE) {
+			while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
+				$array_lost[] = $data[0];
+			}
+			fclose($handle);
+		}
 		foreach ( $this->posts as $post ) {
 			$post = apply_filters( 'wp_import_post_data_raw', $post );
 
+			if($post['post_type'] != 'gallery_item' && !in_array($post['post_id'],$array_lost)){
+				continue;
+			}
 			if ( ! post_type_exists( $post['post_type'] ) ) {
 				printf( __( 'Failed to import &#8220;%s&#8221;: Invalid post type %s', 'wordpress-importer' ),
 					esc_html($post['post_title']), esc_html($post['post_type']) );
@@ -548,7 +557,7 @@ class WP_Import extends WP_Importer {
 			$post_type_object = get_post_type_object( $post['post_type'] );
 
 			$post_exists = post_exists( $post['post_title'], '', $post['post_date'] );
-			if ( $post_exists && get_post_type( $post_exists ) == $post['post_type'] ) {
+			if ( false ) {
 				printf( __('%s &#8220;%s&#8221; already exists.', 'wordpress-importer'), $post_type_object->labels->singular_name, esc_html($post['post_title']) );
 				echo '<br />';
 				$comment_post_ID = $post_id = $post_exists;

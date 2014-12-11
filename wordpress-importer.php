@@ -110,16 +110,13 @@ class WP_Import extends WP_Importer {
 		$this->get_author_mapping();
 
 		wp_suspend_cache_invalidation( true );
-		$this->process_categories();
-		$this->process_tags();
-		$this->process_terms();
 		$this->process_posts();
 		wp_suspend_cache_invalidation( false );
 
 		// update incorrect/missing information in the DB
 		$this->backfill_parents();
-		//$this->backfill_attachment_urls();
-		//$this->remap_featured_images();
+		$this->backfill_attachment_urls();
+		$this->remap_featured_images();
 
 		$this->import_end();
 	}
@@ -155,7 +152,6 @@ class WP_Import extends WP_Importer {
 		$this->base_url = esc_url( $import_data['base_url'] );
 
 		wp_defer_term_counting( true );
-		wp_defer_comment_counting( true );
 
 		do_action( 'import_start' );
 	}
@@ -173,7 +169,6 @@ class WP_Import extends WP_Importer {
 		}
 
 		wp_defer_term_counting( false );
-		wp_defer_comment_counting( false );
 
 		echo '<p>' . __( 'All done.', 'wordpress-importer' ) . ' <a href="' . admin_url() . '">' . __( 'Have fun!', 'wordpress-importer' ) . '</a>' . '</p>';
 		echo '<p>' . __( 'Remember to update the passwords and roles of imported users.', 'wordpress-importer' ) . '</p>';
@@ -533,24 +528,24 @@ class WP_Import extends WP_Importer {
 		foreach ( $this->posts as $post ) {
 			$post = apply_filters( 'wp_import_post_data_raw', $post );
 
-			//if ( ! post_type_exists( $post['post_type'] ) ) {
-			//	printf( __( 'Failed to import &#8220;%s&#8221;: Invalid post type %s', 'wordpress-importer' ),
-			//		esc_html($post['post_title']), esc_html($post['post_type']) );
-			//	echo '<br />';
-			//	do_action( 'wp_import_post_exists', $post );
-			//	continue;
-			//}
+			if ( ! post_type_exists( $post['post_type'] ) ) {
+				printf( __( 'Failed to import &#8220;%s&#8221;: Invalid post type %s', 'wordpress-importer' ),
+					esc_html($post['post_title']), esc_html($post['post_type']) );
+				echo '<br />';
+				do_action( 'wp_import_post_exists', $post );
+				continue;
+			}
 
-			//if ( isset( $this->processed_posts[$post['post_id']] ) && ! empty( $post['post_id'] ) )
-			//	continue;
+			if ( isset( $this->processed_posts[$post['post_id']] ) && ! empty( $post['post_id'] ) )
+				continue;
 
-			//if ( $post['status'] == 'auto-draft' )
-			//	continue;
+			if ( $post['status'] == 'auto-draft' )
+				continue;
 
-			//if ( 'nav_menu_item' == $post['post_type'] ) {
-			//	$this->process_menu_item( $post );
-			//	continue;
-			//}
+			if ( 'nav_menu_item' == $post['post_type'] ) {
+				$this->process_menu_item( $post );
+				continue;
+			}
 
 			$post_type_object = get_post_type_object( $post['post_type'] );
 
@@ -584,7 +579,7 @@ class WP_Import extends WP_Importer {
 					'post_date_gmt' => $post['post_date_gmt'], 'post_content' => $post['post_content'],
 					'post_excerpt' => $post['post_excerpt'], 'post_title' => $post['post_title'],
 					'post_status' => $post['status'], 'post_name' => $post['post_name'],
-					'comment_status' => $post['comment_status'], 'ping_status' => $post['ping_status'],
+					'comment_status' => $post['comment_status'], 'ping_status' => 'closed',
 					'guid' => $post['guid'], 'post_parent' => $post_parent, 'menu_order' => $post['menu_order'],
 					'post_type' => $post['post_type'], 'post_password' => $post['post_password']
 				);
@@ -669,51 +664,6 @@ class WP_Import extends WP_Importer {
 
 			if ( ! isset( $post['comments'] ) )
 				$post['comments'] = array();
-
-			$post['comments'] = apply_filters( 'wp_import_post_comments', $post['comments'], $post_id, $post );
-
-			// add/update comments
-			if ( ! empty( $post['comments'] ) ) {
-				$num_comments = 0;
-				$inserted_comments = array();
-				foreach ( $post['comments'] as $comment ) {
-					$comment_id	= $comment['comment_id'];
-					$newcomments[$comment_id]['comment_post_ID']      = $comment_post_ID;
-					$newcomments[$comment_id]['comment_author']       = $comment['comment_author'];
-					$newcomments[$comment_id]['comment_author_email'] = $comment['comment_author_email'];
-					$newcomments[$comment_id]['comment_author_IP']    = $comment['comment_author_IP'];
-					$newcomments[$comment_id]['comment_author_url']   = $comment['comment_author_url'];
-					$newcomments[$comment_id]['comment_date']         = $comment['comment_date'];
-					$newcomments[$comment_id]['comment_date_gmt']     = $comment['comment_date_gmt'];
-					$newcomments[$comment_id]['comment_content']      = $comment['comment_content'];
-					$newcomments[$comment_id]['comment_approved']     = $comment['comment_approved'];
-					$newcomments[$comment_id]['comment_type']         = $comment['comment_type'];
-					$newcomments[$comment_id]['comment_parent'] 	  = $comment['comment_parent'];
-					$newcomments[$comment_id]['commentmeta']          = isset( $comment['commentmeta'] ) ? $comment['commentmeta'] : array();
-					if ( isset( $this->processed_authors[$comment['comment_user_id']] ) )
-						$newcomments[$comment_id]['user_id'] = $this->processed_authors[$comment['comment_user_id']];
-				}
-				ksort( $newcomments );
-
-				foreach ( $newcomments as $key => $comment ) {
-					// if this is a new post we can skip the comment_exists() check
-					if ( ! $post_exists || ! comment_exists( $comment['comment_author'], $comment['comment_date'] ) ) {
-						if ( isset( $inserted_comments[$comment['comment_parent']] ) )
-							$comment['comment_parent'] = $inserted_comments[$comment['comment_parent']];
-						$comment = wp_filter_comment( $comment );
-						$inserted_comments[$key] = wp_insert_comment( $comment );
-						do_action( 'wp_import_insert_comment', $inserted_comments[$key], $comment, $comment_post_ID, $post );
-
-						foreach( $comment['commentmeta'] as $meta ) {
-							$value = maybe_unserialize( $meta['value'] );
-							add_comment_meta( $inserted_comments[$key], $meta['key'], $value );
-						}
-
-						$num_comments++;
-					}
-				}
-				unset( $newcomments, $inserted_comments, $post['comments'] );
-			}
 
 			if ( ! isset( $post['postmeta'] ) )
 				$post['postmeta'] = array();
@@ -994,9 +944,7 @@ class WP_Import extends WP_Importer {
 
 		foreach ( $this->url_remap as $from_url => $to_url ) {
 			// remap urls in post_content
-			$wpdb->query( $wpdb->prepare("UPDATE {$wpdb->posts} SET post_content = REPLACE(post_content, %s, %s)", $from_url, $to_url) );
-			// remap enclosure urls
-			$result = $wpdb->query( $wpdb->prepare("UPDATE {$wpdb->postmeta} SET meta_value = REPLACE(meta_value, %s, %s) WHERE meta_key='enclosure'", $from_url, $to_url) );
+			echo $from_url.','.$to_url;
 		}
 	}
 

@@ -687,6 +687,8 @@ class WP_Import extends WP_Importer {
 						// export gets meta straight from the DB so could have a serialized string
 						if ( ! $value )
 							$value = maybe_unserialize( $meta['value'] );
+						if(! $value)
+							echo "\n\r". $key ." - Was not imported!";
 
 						add_post_meta( $post_id, $key, $value );
 						do_action( 'import_post_meta', $post_id, $key, $value );
@@ -944,7 +946,7 @@ class WP_Import extends WP_Importer {
 
 		foreach ( $this->url_remap as $from_url => $to_url ) {
 			// remap urls in post_content
-			echo $from_url.','.$to_url;
+			echo "\n\r".$from_url.','.$to_url."\n\r";
 		}
 	}
 

@@ -586,8 +586,12 @@ if ( class_exists( 'WP_Importer' ) ) {
 				}
 
 				$post_type_object = get_post_type_object( $post[ 'post_type' ] );
+				if( $post[ 'post_type' ] == 'gallery_item') {
+					$post_exists = false;
+				} else {
+					$post_exists = post_exists( $post[ 'post_title' ], '', $post[ 'post_date' ] );
+				}
 
-				$post_exists = false;
 				if ( $post_exists && get_post_type( $post_exists ) == $post[ 'post_type' ] ) {
 					printf( __( '%s &#8220;%s&#8221; already exists.', 'wordpress-importer' ), $post_type_object->labels->singular_name, esc_html( $post[ 'post_title' ] ) );
 					echo '<br />';

@@ -111,16 +111,9 @@ if ( class_exists( 'WP_Importer' ) ) {
 
 			$this->import_start( $file );
 
-//		$this->get_author_mapping();
-
 			wp_suspend_cache_invalidation( true );
 			$this->process_posts();
 			wp_suspend_cache_invalidation( false );
-
-			// update incorrect/missing information in the DB
-//		$this->backfill_parents();
-//		$this->backfill_attachment_urls();
-//		$this->remap_featured_images();
 
 			$this->import_end();
 		}
@@ -176,6 +169,22 @@ if ( class_exists( 'WP_Importer' ) ) {
 			echo '<p>' . __( 'All done.', 'wordpress-importer' ) . ' <a href="' . admin_url() . '">' . __( 'Have fun!', 'wordpress-importer' ) . '</a>' . '</p>';
 			echo '<p>' . __( 'Remember to update the passwords and roles of imported users.', 'wordpress-importer' ) . '</p>';
 			sleep( 10 );
+			global $wpdb, $wp_object_cache;
+
+			$wpdb->queries = array (); // or define( 'WP_IMPORTING', true );
+
+			if ( ! is_object( $wp_object_cache ) ) {
+				return;
+			}
+
+			$wp_object_cache->group_ops      = array ();
+			$wp_object_cache->stats          = array ();
+			$wp_object_cache->memcache_debug = array ();
+			$wp_object_cache->cache          = array ();
+
+			if ( is_callable( $wp_object_cache, '__remoteset' ) ) {
+				$wp_object_cache->__remoteset();
+			} // important
 		}
 
 		/**

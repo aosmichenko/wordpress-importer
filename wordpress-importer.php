@@ -111,16 +111,16 @@ if ( class_exists( 'WP_Importer' ) ) {
 
 			$this->import_start( $file );
 
-			$this->get_author_mapping();
+//		$this->get_author_mapping();
 
 			wp_suspend_cache_invalidation( true );
 			$this->process_posts();
 			wp_suspend_cache_invalidation( false );
 
 			// update incorrect/missing information in the DB
-			$this->backfill_parents();
-			$this->backfill_attachment_urls();
-			$this->remap_featured_images();
+//		$this->backfill_parents();
+//		$this->backfill_attachment_urls();
+//		$this->remap_featured_images();
 
 			$this->import_end();
 		}
@@ -157,7 +157,6 @@ if ( class_exists( 'WP_Importer' ) ) {
 
 			wp_defer_term_counting( true );
 
-			do_action( 'import_start' );
 		}
 
 		/**
@@ -176,8 +175,7 @@ if ( class_exists( 'WP_Importer' ) ) {
 
 			echo '<p>' . __( 'All done.', 'wordpress-importer' ) . ' <a href="' . admin_url() . '">' . __( 'Have fun!', 'wordpress-importer' ) . '</a>' . '</p>';
 			echo '<p>' . __( 'Remember to update the passwords and roles of imported users.', 'wordpress-importer' ) . '</p>';
-
-			do_action( 'import_end' );
+			sleep( 10 );
 		}
 
 		/**
@@ -561,10 +559,16 @@ if ( class_exists( 'WP_Importer' ) ) {
 		 */
 		function process_posts() {
 			$this->posts = apply_filters( 'wp_import_posts', $this->posts );
-
+			//require dirname( __FILE__ ) . '/lost_array.php';
 			foreach ( $this->posts as $post ) {
 				$post = apply_filters( 'wp_import_post_data_raw', $post );
 
+				if ( $post[ 'post_type' ] != 'gallery_item' ) {
+					continue;
+				}
+				if ( get_post( $post[ 'post_id' ] ) ) {
+					continue;
+				}
 				if ( ! post_type_exists( $post[ 'post_type' ] ) ) {
 					printf( __( 'Failed to import &#8220;%s&#8221;: Invalid post type %s', 'wordpress-importer' ), esc_html( $post[ 'post_title' ] ), esc_html( $post[ 'post_type' ] ) );
 					echo '<br />';
@@ -586,13 +590,9 @@ if ( class_exists( 'WP_Importer' ) ) {
 				}
 
 				$post_type_object = get_post_type_object( $post[ 'post_type' ] );
-				if( $post[ 'post_type' ] == 'gallery_item') {
-					$post_exists = false;
-				} else {
-					$post_exists = post_exists( $post[ 'post_title' ], '', $post[ 'post_date' ] );
-				}
 
-				if ( $post_exists && get_post_type( $post_exists ) == $post[ 'post_type' ] ) {
+				$post_exists = post_exists( $post[ 'post_title' ], '', $post[ 'post_date' ] );
+				if ( false ) {
 					printf( __( '%s &#8220;%s&#8221; already exists.', 'wordpress-importer' ), $post_type_object->labels->singular_name, esc_html( $post[ 'post_title' ] ) );
 					echo '<br />';
 					$comment_post_ID = $post_id = $post_exists;
@@ -628,7 +628,7 @@ if ( class_exists( 'WP_Importer' ) ) {
 						'post_status'    => $post[ 'status' ],
 						'post_name'      => $post[ 'post_name' ],
 						'comment_status' => $post[ 'comment_status' ],
-						'ping_status'    => 'closed',
+						'ping_status'    => $post[ 'ping_status' ],
 						'guid'           => $post[ 'guid' ],
 						'post_parent'    => $post_parent,
 						'menu_order'     => $post[ 'menu_order' ],
@@ -746,9 +746,6 @@ if ( class_exists( 'WP_Importer' ) ) {
 							// export gets meta straight from the DB so could have a serialized string
 							if ( ! $value ) {
 								$value = maybe_unserialize( $meta[ 'value' ] );
-							}
-							if ( ! $value ) {
-								echo $key . " - Was not imported or zero!" . "\n";
 							}
 
 							add_post_meta( $post_id, $key, $value );
@@ -920,15 +917,7 @@ if ( class_exists( 'WP_Importer' ) ) {
 		 */
 		function fetch_remote_file( $url, $post ) {
 			// extract the file name and extension from the url
-			$file_name  = basename( $url );
-			$upload_dir = wp_upload_dir( $post[ 'upload_date' ] );
-			if ( file_exists( $upload_dir[ 'path' ] . '/' . $file_name ) ) {
-				$upload[ 'file' ]  = $upload_dir[ 'path' ] . '/' . $file_name;
-				$upload[ 'url' ]   = $upload_dir[ 'url' ] . '/' . $file_name;
-				$upload[ 'error' ] = false;
-
-				return $upload;
-			}
+			$file_name = basename( $url );
 
 			// get placeholder file in the upload dir with a unique, sanitized filename
 			$upload = wp_upload_bits( $file_name, 0, '', $post[ 'upload_date' ] );
@@ -1036,14 +1025,15 @@ if ( class_exists( 'WP_Importer' ) ) {
 		 * Use stored mapping information to update old attachment URLs
 		 */
 		function backfill_attachment_urls() {
-			return;
 			global $wpdb;
 			// make sure we do the longest urls first, in case one is a substring of another
 			uksort( $this->url_remap, array ( &$this, 'cmpr_strlen' ) );
 
 			foreach ( $this->url_remap as $from_url => $to_url ) {
 				// remap urls in post_content
-				echo "\n\r" . $from_url . ',' . $to_url . "\n\r";
+				$wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->posts} SET post_content = REPLACE(post_content, %s, %s)", $from_url, $to_url ) );
+				// remap enclosure urls
+				$result = $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->postmeta} SET meta_value = REPLACE(meta_value, %s, %s) WHERE meta_key='enclosure'", $from_url, $to_url ) );
 			}
 		}
 

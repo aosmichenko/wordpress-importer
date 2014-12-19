@@ -590,9 +590,7 @@ if ( class_exists( 'WP_Importer' ) ) {
 					$comment_post_ID = $post_id = $post_exists;
 				} else {
 					$post_parent = (int) $post[ 'post_parent' ];
-					if ( $post_parent == 0 ) {
-						continue;
-					}
+				
 //					if ( $post_parent ) {
 //						// if we already know the parent, map it to the new local ID
 //						if ( isset( $this->processed_posts[ $post_parent ] ) ) {

@@ -110,10 +110,18 @@ if ( class_exists( 'WP_Importer' ) ) {
 			add_filter( 'http_request_timeout', array ( &$this, 'bump_request_timeout' ) );
 
 			$this->import_start( $file );
-
+			
+			$this->get_author_mapping();
+			
 			wp_suspend_cache_invalidation( true );
 			$this->process_posts();
 			wp_suspend_cache_invalidation( false );
+			
+			// update incorrect/missing information in the DB
+	//		$this->backfill_parents();
+	//		$this->backfill_attachment_urls();
+			$this->remap_featured_images();
+
 			$this->import_end();
 		}
 
@@ -590,17 +598,6 @@ if ( class_exists( 'WP_Importer' ) ) {
 					$comment_post_ID = $post_id = $post_exists;
 				} else {
 					$post_parent = (int) $post[ 'post_parent' ];
-				
-//					if ( $post_parent ) {
-//						// if we already know the parent, map it to the new local ID
-//						if ( isset( $this->processed_posts[ $post_parent ] ) ) {
-//							$post_parent = $this->processed_posts[ $post_parent ];
-//							// otherwise record the parent for later
-//						} else {
-//							$this->post_orphans[ intval( $post[ 'post_id' ] ) ] = $post_parent;
-//							$post_parent                                        = 0;
-//						}
-//					}
 
 					// map the post author
 					$author = sanitize_user( $post[ 'post_author' ], true );
@@ -1150,10 +1147,10 @@ if ( class_exists( 'WP_Importer' ) ) {
 		/**
 		 * Added to http_request_timeout filter to force timeout at 60 seconds during import
 		 *
-		 * @return int 60
+		 * @return int 360
 		 */
 		function bump_request_timeout( $val ) {
-			return 60;
+			return 360;
 		}
 
 		// return the difference in length between two strings
